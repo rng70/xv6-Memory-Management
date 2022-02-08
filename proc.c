@@ -115,6 +115,15 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+  // initialize page structure info for process while allocating
+  for (int i = 0; i < MAX_TOTAL_PAGES; i++)
+  {
+    p->pages[i].inswapfile = 0;
+    p->pages[i].swaploc = 0;
+  }
+
+  p->pagesNo = 0;
+
   return p;
 }
 
@@ -204,6 +213,7 @@ int fork(void)
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
+  np->pagesNo = curproc->pagesNo; // pagesNo from parent process
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -216,6 +226,24 @@ int fork(void)
   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
 
   pid = np->pid;
+
+  // here create swap file for current process
+  createSwapFile(np);
+  char buf[PGSIZE / 2] = "";
+  int offset = 0;
+  int nread = 0;
+
+  if (np->pid > 2)
+  {
+    while ((nread = readFromSwapFile(curproc, buf, offset, PGSIZE / 2)) != 0)
+    {
+      if (writeToSwapFile(np, buf, offset, nread) == -1)
+      {
+        panic("fork: error while writing from parent's swap file to child");
+      }
+      offset += nread;
+    }
+  }
 
   acquire(&ptable.lock);
 
@@ -248,6 +276,10 @@ void exit(void)
     }
   }
 
+  if (removeSwapFile(curproc) != 0)
+  {
+    panic("exit: error removing swap file");
+  }
   begin_op();
   iput(curproc->cwd);
   end_op();
@@ -542,11 +574,10 @@ void procdump(void)
     cprintf("\nPage tables");
     cprintf("\n\tmemory location of page directory = %d\npdir PTE %d, %d\n", (p->pgdir[0]), PDX(p->pgdir[0]), (p->pgdir[0]));
 
-    pde_t* pgdir = (pde_t *)cpu->ts.cr3;
+    pde_t *pgdir = (pde_t *)cpu->ts.cr3;
     cprintf("page directory base is: %p\n", cpu->ts.cr3);
 
     cprintf("Size of page table is %d\n", p->sz);
     cprintf("Page mappings:\n");
-
   }
 }
