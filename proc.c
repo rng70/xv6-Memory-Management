@@ -538,6 +538,65 @@ int kill(int pid)
   return -1;
 }
 
+void printExtendedOutputOnControlP(struct proc *p)
+{
+  int k, p, c;
+  k = 20;
+  p = 13;
+  c = 0;
+
+  cprintf("\nPage tables");
+  cprintf("\n\tmemory location of page directory = %d", V2P(p->pgdir));
+  /**
+   * @brief now iterate over the page table and see
+   * if the user have the access to the page table entry
+   */
+  uint virtual_page_number[NPTENTRIES];
+  uint physical_page_number[NPTENTRIES];
+  int count;
+
+  for (int pd_index = 0; pd_index < NPDENTRIES; pd_index++)
+  {
+    if ((PTE_U & PTE_FLAGS(p->pgdir[pd_index])) && (PTE_A & PTE_FLAGS(p->pgdir[pd_index])))
+    {
+      // retriving 32 bits of the page table entry of the page directory
+      pte_t *pte = (pte_t *)PTE_ADDR(p->pgdir[pd_index]);
+      // retriving the upper 20 bits to access the PPN of the PTE
+      cprintf("\n\tpdir PTE %d, %d:", pd_index, (((1 << k) - 1) & ((uint)pte >> (uint)(p - 1))));
+      // print the physical memory address of the page table
+      cprintf("\n\t\tMemory location of page table = %x", pte);
+
+      /**
+       * @brief now iterate over the page table entries
+       * to retrive the virtual page number of the page table
+       * at second layer
+       */
+      for (int pt_index = 0; pt_index < NPTENTRIES; pt_index++)
+      {
+        /**
+         * @brief retriving the virtual page number of the page table
+         * pointer is actually 'pain in ass'
+         * fuck you pointer
+         */
+        pte_t *pte2 = (pte_t *)((pte_t *)P2V(pte))[pt_index];
+        // check accessibility[flags]
+        if ((PTE_U & PTE_FLAGS(pte2)) && (PTE_A & PTE_FLAGS(pte2)))
+        {
+          virtual_page_number[c] = (pd_index << 10) + pt_index;
+          physical_page_number[c] = (uint)((((1 << k) - 1) & ((uint)pte2 >> (uint)(p - 1))));
+          c++;
+          cprintf("\n\t\tptbl PTE %d, %d, %x", pt_index, (uint)physical_page_number[c - 1], PTE_ADDR(pte2));
+        }
+      }
+    }
+  }
+  cprintf("\n\tPage Mappings:");
+  for (int i = 0; i < c; i++)
+  {
+    cprintf("\n%d --> %d", virtual_page_number[i], physical_page_number[i]);
+  }
+  cprintf("\n");
+}
 // PAGEBREAK: 36
 //  Print a process listing to console.  For debugging.
 //  Runs when user types ^P on console.
@@ -571,13 +630,6 @@ void procdump(void)
       for (i = 0; i < 10 && pc[i] != 0; i++)
         cprintf(" %p", pc[i]);
     }
-    cprintf("\nPage tables");
-    cprintf("\n\tmemory location of page directory = %d\npdir PTE %d, %d\n", (p->pgdir[0]), PDX(p->pgdir[0]), (p->pgdir[0]));
-
-    pde_t *pgdir = (pde_t *)cpu->ts.cr3;
-    cprintf("page directory base is: %p\n", cpu->ts.cr3);
-
-    cprintf("Size of page table is %d\n", p->sz);
-    cprintf("Page mappings:\n");
+    printExtendedOutputOnControlP(p);
   }
 }
