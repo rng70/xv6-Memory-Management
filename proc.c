@@ -539,9 +539,14 @@ void procdump(void)
       for (i = 0; i < 10 && pc[i] != 0; i++)
         cprintf(" %p", pc[i]);
     }
-    cprintf("\nPage tables\n");
-    cprintf("\tmemory location of page directory = %d\n", (p->pgdir[0]));
+    cprintf("\nPage tables");
+    cprintf("\n\tmemory location of page directory = %d\npdir PTE %d, %d\n", (p->pgdir[0]), PDX(p->pgdir[0]), (p->pgdir[0]));
 
-    cprintf("Size of page table is %d\n", p->sz)
+    pde_t* pgdir = (pde_t *)cpu->ts.cr3;
+    cprintf("page directory base is: %p\n", cpu->ts.cr3);
+
+    cprintf("Size of page table is %d\n", p->sz);
+    cprintf("Page mappings:\n");
+
   }
 }
