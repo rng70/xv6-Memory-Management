@@ -82,12 +82,14 @@ void trap(struct trapframe *tf)
     uint *vaddr = (uint *)P2V_WO(myproc()->pgdir[PDX(addr)]);
 
     // check
-    if ((int)vaddr & PTE_P)
+    if ((int)vaddr & PTE_P) // if page table isn't present at page directory --> hard page fault
     {
-      if (vaddr[PTX(addr)] & PTE_PG && !(vaddr[PTX(addr)] & PTE_P))
+      if (vaddr[PTX(addr)] & PTE_PG && !(vaddr[PTX(addr)] & PTE_P)) // if the page is in the process's swap file
       {
         cprintf("page is in swap file, pid %d, va %p", myproc()->pid, addr);
-        swapPages(addr & ~0xfff);
+        uint paddr = (uint)(addr & ~0xfff);
+        swapPages(paddr);
+        myproc()->totalPageFaultCount++;
       }
     }
     break;

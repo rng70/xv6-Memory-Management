@@ -21,6 +21,14 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
+int strcmp(const char *p, const char *q)
+{
+  while (*p && *p == *q)
+  {
+    p++, q++;
+  }
+  return (uchar)*p - (uchar)*q;
+}
 void pinit(void)
 {
   initlock(&ptable.lock, "ptable");
@@ -123,6 +131,8 @@ found:
   }
 
   p->pagesNo = 0;
+  p->totalPagedOutCount = 0;
+  p->totalPageFaultCount = 0;
 
   return p;
 }
@@ -181,6 +191,7 @@ int growproc(int n)
   {
     if ((sz = deallocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
+    curproc->pagesNo -= PGROUNDUP(n);
   }
   curproc->sz = sz;
   switchuvm(curproc);
@@ -233,7 +244,7 @@ int fork(void)
   int offset = 0;
   int nread = 0;
 
-  if (np->pid > 2)
+  if (strcmp(curproc->name, "init") != 0 && strcmp(curproc->name, "sh") != 0)
   {
     while ((nread = readFromSwapFile(curproc, buf, offset, PGSIZE / 2)) != 0)
     {
@@ -540,9 +551,9 @@ int kill(int pid)
 
 void printExtendedOutputOnControlP(struct proc *p)
 {
-  int k, p, c;
+  int k, sft, c;
   k = 20;
-  p = 13;
+  sft = 13;
   c = 0;
 
   cprintf("\nPage tables");
@@ -553,7 +564,6 @@ void printExtendedOutputOnControlP(struct proc *p)
    */
   uint virtual_page_number[NPTENTRIES];
   uint physical_page_number[NPTENTRIES];
-  int count;
 
   for (int pd_index = 0; pd_index < NPDENTRIES; pd_index++)
   {
@@ -562,7 +572,7 @@ void printExtendedOutputOnControlP(struct proc *p)
       // retriving 32 bits of the page table entry of the page directory
       pte_t *pte = (pte_t *)PTE_ADDR(p->pgdir[pd_index]);
       // retriving the upper 20 bits to access the PPN of the PTE
-      cprintf("\n\tpdir PTE %d, %d:", pd_index, (((1 << k) - 1) & ((uint)pte >> (uint)(p - 1))));
+      cprintf("\n\tpdir PTE %d, %d:", pd_index, (((1 << k) - 1) & ((uint)pte >> (uint)(sft - 1))));
       // print the physical memory address of the page table
       cprintf("\n\t\tMemory location of page table = %x", pte);
 
@@ -583,14 +593,14 @@ void printExtendedOutputOnControlP(struct proc *p)
         if ((PTE_U & PTE_FLAGS(pte2)) && (PTE_A & PTE_FLAGS(pte2)))
         {
           virtual_page_number[c] = (pd_index << 10) + pt_index;
-          physical_page_number[c] = (uint)((((1 << k) - 1) & ((uint)pte2 >> (uint)(p - 1))));
+          physical_page_number[c] = (uint)((((1 << k) - 1) & ((uint)pte2 >> (uint)(sft - 1))));
           c++;
           cprintf("\n\t\tptbl PTE %d, %d, %x", pt_index, (uint)physical_page_number[c - 1], PTE_ADDR(pte2));
         }
       }
     }
   }
-  cprintf("\n\tPage Mappings:");
+  cprintf("\nPage Mappings:");
   for (int i = 0; i < c; i++)
   {
     cprintf("\n%d --> %d", virtual_page_number[i], physical_page_number[i]);

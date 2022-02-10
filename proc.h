@@ -53,7 +53,7 @@ struct pgdesc
   char used;
   uint swaploc;
   uint virtpageno;
-}
+};
 
 // Per-process state
 struct proc
@@ -75,6 +75,8 @@ struct proc
   struct file *swapFile;                // page file
   int pagesNo;                          // Number of pages for per process
   struct pgdesc pages[MAX_TOTAL_PAGES]; // Number of maximum pages for per process in page table
+  int totalPageFaultCount;
+  int totalPagedOutCount;
 };
 
 // Process memory is laid out contiguously, low addresses first:

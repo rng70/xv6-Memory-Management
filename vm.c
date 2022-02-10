@@ -217,6 +217,10 @@ int loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
   return 0;
 }
 
+void swapPages(uint addr)
+{
+}
+
 void updatePagesForProc(uint va)
 {
   for (int i = 0; i < MAX_TOTAL_PAGES; i++)
@@ -255,7 +259,14 @@ int allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       deallocuvm(pgdir, newsz, oldsz);
       return 0;
     }
-    // Update the virtual address of the specific page
+    /**
+     * @brief Update the virtual address of the specific page
+     * but before updateding check if maximum current page limit
+     * if the limit exicceeded then paged out to disk
+     */
+    if(myproc()->pagesNo > 14){
+      myproc()->totalPagedOutCount++;
+    }
     uint va = PTE_ADDR(mem);
     updatePagesForProc(va);
 

@@ -40,6 +40,7 @@ int exec(char *path, char **argv)
 
   // Load program into memory.
   // when a porgram loads into memory then no pages is stored in swap area
+  int oldpagesno = curproc->pagesNo;
   curproc->pagesNo = 0;
   sz = 0;
   for (i = 0, off = elf.phoff; i < elf.phnum; i++, off += sizeof(ph))
@@ -103,8 +104,17 @@ int exec(char *path, char **argv)
   curproc->sz = sz;
   curproc->tf->eip = elf.entry; // main
   curproc->tf->esp = sp;
+
+  /**
+   * @brief a swap file that was created in for() but it's
+   * content was similar to the content of the parent process is
+   * no longer relevent here
+   */
+  removeSwapFile(curproc);
+  createSwapFile(curproc);
   switchuvm(curproc);
   freevm(oldpgdir);
+  cprintf("no. pages allocated on exec: %d, pid %d\n", curproc->pagesNo, curproc->pid);
   return 0;
 
 bad:
@@ -115,5 +125,6 @@ bad:
     iunlockput(ip);
     end_op();
   }
+  curproc->pagesNo = oldpagesno;
   return -1;
 }
