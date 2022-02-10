@@ -221,8 +221,36 @@ void swapPages(uint addr)
 {
   if (strcmp(myproc()->name, "init") != 0 && strcmp(myproc()->name, "sh") != 0)
   {
+    myproc()->pagesinmem++;
     return;
   }
+
+#ifdef FIFO
+  struct freepg *link = myproc()->head;
+  struct freepg *l;
+
+  if (link == 0)
+  {
+    panic("swapPages: proc->head is NULL");
+  }
+  if (link->next == 0)
+  {
+    panic("swapPages: single page in physical memory");
+  }
+
+  while (link->next->next != 0)
+  {
+    link = link->next;
+  }
+  l = link->next;
+  link->next = 0;
+  l->next = myproc()->head;
+  proc->head = l;
+#else
+#ifdef AGING
+#else
+#endif
+#endif
   myproc()->totalPagedOutCount++;
 }
 
