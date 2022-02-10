@@ -47,12 +47,22 @@ enum procstate
   ZOMBIE
 };
 
+/**
+ * @brief page description
+ */
 struct pgdesc
 {
-  char inswapfile;
-  char used;
   uint swaploc;
-  uint virtpageno;
+  uint va;
+};
+
+/**
+ * @brief free page description
+ */
+struct freepg
+{
+  uint va;
+  struct freepg *next;
 };
 
 // Per-process state
@@ -72,9 +82,13 @@ struct proc
   struct inode *cwd;          // Current directory
   char name[16];              // Process name (debugging)
   // Swap file. must initiate with create swap file
-  struct file *swapFile;                // page file
-  int pagesNo;                          // Number of pages for per process
-  struct pgdesc pages[MAX_TOTAL_PAGES]; // Number of maximum pages for per process in page table
+  struct file *swapFile; // page file
+
+  int pagesinmem;
+  int pagesinswapfile;
+  struct pgdesc swappedpages[MAX_PSYC_PAGES]; // Number of maximum pages for per process in page table
+  struct freepg freepages[MAX_PSYC_PAGES];
+  struct freepg *head;
   int totalPageFaultCount;
   int totalPagedOutCount;
 };

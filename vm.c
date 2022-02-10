@@ -219,22 +219,26 @@ int loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
 
 void swapPages(uint addr)
 {
+  if (strcmp(myproc()->name, "init") != 0 && strcmp(myproc()->name, "sh") != 0){
+    return;
+  }
+  myproc()->totalPagedOutCount++;
 }
 
-void updatePagesForProc(uint va)
+void recordNewPage(uint va)
 {
-  for (int i = 0; i < MAX_TOTAL_PAGES; i++)
+  for (int i = 0; i < MAX_PSYC_PAGES; i++)
   {
-    if (!myproc()->pages[i].used)
+    if (!myproc()->freepages[i].va)
     {
-      myproc()->pages[i].used = 1;
-      myproc()->pages[i].virtpageno = va;
-      myproc()->pagesNo++;
+      myproc()->freepages[i].next = myproc()->head;
+      myproc()->head = &myproc()->freepages[i];
+      myproc()->pagesinmem++;
       return;
     }
-  }
 
-  panic("updatePagesForProc: all pages are used");
+    panic("recordNewPages: no free pages");
+  }
 }
 
 // Allocate page tables and physical memory to grow process from oldsz to
@@ -264,11 +268,16 @@ int allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
      * but before updateding check if maximum current page limit
      * if the limit exicceeded then paged out to disk
      */
-    if(myproc()->pagesNo > 14){
-      myproc()->totalPagedOutCount++;
+    if (myproc()->pagesinmem > 14)
+    {
+      uint va = PTE_ADDR(mem);
+      swapPages(va);
     }
-    uint va = PTE_ADDR(mem);
-    updatePagesForProc(va);
+    else
+    {
+      uint va = PTE_ADDR(mem);
+      recordNewPage(va);
+    }
 
     memset(mem, 0, PGSIZE);
     if (mappages(pgdir, (char *)a, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0)

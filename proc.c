@@ -124,13 +124,15 @@ found:
   p->context->eip = (uint)forkret;
 
   // initialize page structure info for process while allocating
-  for (int i = 0; i < MAX_TOTAL_PAGES; i++)
+  for (int i = 0; i < MAX_PSYC_PAGES; i++)
   {
-    p->pages[i].inswapfile = 0;
-    p->pages[i].swaploc = 0;
+    p->freepages[i].va = 0;
+    p->freepages[i].next = 0;
+    p->swappedpages[i].swaploc = 0;
+    p->swappedpages[i].va = 0;
   }
 
-  p->pagesNo = 0;
+  p->pagesinmem = 0;
   p->totalPagedOutCount = 0;
   p->totalPageFaultCount = 0;
 
@@ -191,7 +193,8 @@ int growproc(int n)
   {
     if ((sz = deallocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
-    curproc->pagesNo -= PGROUNDUP(n);
+    // curproc->pagesinmem -= PGROUNDUP(n);
+    curproc->pagesinmem -= ((PGROUNDUP(sz) - PGROUNDUP(curproc->sz)) % PGSIZE);
   }
   curproc->sz = sz;
   switchuvm(curproc);
@@ -224,7 +227,7 @@ int fork(void)
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
-  np->pagesNo = curproc->pagesNo; // pagesNo from parent process
+  np->pagesinmem = curproc->pagesinmem; // pagesNo from parent process
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
