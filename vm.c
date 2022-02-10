@@ -219,7 +219,8 @@ int loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
 
 void swapPages(uint addr)
 {
-  if (strcmp(myproc()->name, "init") != 0 && strcmp(myproc()->name, "sh") != 0){
+  if (strcmp(myproc()->name, "init") != 0 && strcmp(myproc()->name, "sh") != 0)
+  {
     return;
   }
   myproc()->totalPagedOutCount++;
@@ -268,7 +269,7 @@ int allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
      * but before updateding check if maximum current page limit
      * if the limit exicceeded then paged out to disk
      */
-    if (myproc()->pagesinmem > 14)
+    if (myproc()->pagesinmem > (MAX_PSYC_PAGES - 1))
     {
       uint va = PTE_ADDR(mem);
       swapPages(va);

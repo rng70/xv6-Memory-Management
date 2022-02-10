@@ -90,6 +90,7 @@ void trap(struct trapframe *tf)
         uint paddr = (uint)(addr & ~0xfff);
         swapPages(paddr);
         myproc()->totalPageFaultCount++;
+        return;
       }
     }
     break;

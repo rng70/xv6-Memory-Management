@@ -133,8 +133,10 @@ found:
   }
 
   p->pagesinmem = 0;
+  p->pagesinswapfile = 0;
   p->totalPagedOutCount = 0;
   p->totalPageFaultCount = 0;
+  p->head = 0;
 
   return p;
 }
