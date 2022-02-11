@@ -219,6 +219,8 @@ int loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
 
 void swapPages(uint addr)
 {
+  pte_t *pte1, *pte2;
+  char *buf;
   if (strcmp(myproc()->name, "init") != 0 && strcmp(myproc()->name, "sh") != 0)
   {
     myproc()->pagesinmem++;
@@ -244,8 +246,36 @@ void swapPages(uint addr)
   }
   l = link->next;
   link->next = 0;
+
+  // find the address of the page table entry to copy into the swap file
+  pte1 = walkpgdir(proc->pgdir, (void *)l->va, 0);
+  if (!*pte1)
+    panic("swapFile: FIFO pte1 is empty");
+  // find a swap file page descriptor slot
+  for (i = 0; i < MAX_PSYC_PAGES; i++)
+    if (proc->swappedpages[i].va == PTE_ADDR(addr))
+      break;
+  // update relevant fields in proc
+  proc->swappedpages[i].va = P2V_WO(PTE_ADDR(*pte1));
+  // assign the physical page to addr in the relevant page table
+  pte2 = walkpgdir(proc->pgdir, (void *)addr, 0);
+  if (!*pte2)
+    panic("swapFile: FIFO pte2 is empty");
+  // set page table entry
+  *pte2 = PTE_ADDR(*pte1) | PTE_U | PTE_W | PTE_P;
+  // copy the new page from the swap file to buf
+  readFromSwapFile(proc, buf, i * PGSIZE, PGSIZE);
+  // copy the old page from the memory to the swap file
+  writeToSwapFile(proc, (char *)PTE_ADDR(*pte1), i * PGSIZE, PGSIZE);
+  // copy the new page from buf to the memory
+  memmove((void *)PTE_ADDR(addr), (void *)buf, PGSIZE);
+  // update the page table entry flags, reset the physical page address
+  *pte1 = PTE_U | PTE_W | PTE_PG;
+  // update l to hold the new va
+
   l->next = myproc()->head;
   proc->head = l;
+  l->va = PTE_ADDR(addr);
 #else
 #ifdef AGING
 #else
@@ -256,10 +286,12 @@ void swapPages(uint addr)
 
 void recordNewPage(uint va)
 {
+#ifdef SELECTION == FIFO
   for (int i = 0; i < MAX_PSYC_PAGES; i++)
   {
     if (!myproc()->freepages[i].va)
     {
+      myproc()->freepages[i].va = va;
       myproc()->freepages[i].next = myproc()->head;
       myproc()->head = &myproc()->freepages[i];
       myproc()->pagesinmem++;
@@ -268,6 +300,44 @@ void recordNewPage(uint va)
 
     panic("recordNewPages: no free pages");
   }
+#else
+#endif
+}
+
+char *writePageToSwapFile(char *addr)
+{
+#ifdef SELECTION == FIFO
+  struct freepg *link, *l;
+  for (i = 0; i < MAX_PSYC_PAGES; i++)
+  {
+    if (proc->swappedpages[i].va == 0)
+      goto foundswappedpageslot;
+  }
+  panic("writePageToSwapFile: FIFO no slot for swapped page");
+foundswappedpageslot:
+  link = proc->head;
+  if (link == 0)
+    panic("swapPages: proc->head is NULL");
+  if (link->next == 0)
+    panic("swapPages: single page in phys mem");
+  // find the before-last link in the used pages list
+  while (link->next->next != 0)
+    link = link->next;
+  l = link->next;
+  link->next = 0;
+  proc->swappedpages[i].va = l->va;
+  writeToSwapFile(proc, (char *)PTE_ADDR(l->va), i * PGSIZE, PGSIZE);
+  pte_t *pte1 = walkpgdir(proc->pgdir, (void *)l->va, 0);
+  if (!*pte1)
+    panic("writePageToSwapFile: pte1 is empty");
+  pte_t *pte2 = walkpgdir(proc->pgdir, addr, 1);
+  // if (!*pte2)
+  //   panic("writePageToSwapFile: pte2 is empty");
+  *pte2 = PTE_ADDR(*pte1) | PTE_U | PTE_P | PTE_W;
+  *pte1 = PTE_W | PTE_U | PTE_PG;
+  return (char *)pte2;
+#else
+#endif
 }
 
 // Allocate page tables and physical memory to grow process from oldsz to

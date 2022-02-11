@@ -57,7 +57,6 @@ int readFromSwapFile(struct proc *p, char *buffer, uint placeOnFile, uint size);
 int writeToSwapFile(struct proc *p, char *buffer, uint placeOnFile, uint size);
 int removeSwapFile(struct proc *p);
 void swapPages(uint);
-int strcmp(const char *, const char *);
 
 // ide.c
 void ideinit(void);
@@ -155,6 +154,7 @@ void *memmove(void *, const void *, uint);
 void *memset(void *, int, uint);
 char *safestrcpy(char *, const char *, int);
 int strlen(const char *);
+int strcmp(const char *, const char *);
 int strncmp(const char *, const char *, uint);
 char *strncpy(char *, const char *, int);
 

@@ -40,8 +40,31 @@ int exec(char *path, char **argv)
 
   // Load program into memory.
   // when a porgram loads into memory then no pages is stored in swap area
-  int oldpagesno = curproc->pagesinmem;
+  // backup and reset proc fields
+  int pagesinmem = curproc->pagesinmem;
+  int pagesinswapfile = curproc->pagesinswapfile;
+  int totalPageFaultCount = curproc->totalPageFaultCount;
+  int totalPagedOutCount = curproc->totalPagedOutCount;
+  struct freepg freepages[MAX_PSYC_PAGES];
+  struct pgdesc swappedpages[MAX_PSYC_PAGES];
+  for (i = 0; i < MAX_PSYC_PAGES; i++)
+  {
+    freepages[i].va = curproc->freepages[i].va;
+    curproc->freepages[i].va = 0;
+    freepages[i].next = curproc->freepages[i].next;
+    curproc->freepages[i].next = 0;
+    swappedpages[i].va = curproc->swappedpages[i].va;
+    curproc->swappedpages[i].va = 0;
+    swappedpages[i].swaploc = curproc->swappedpages[i].swaploc;
+    curproc->swappedpages[i].swaploc = 0;
+  }
+  struct freepg *head = curproc->head;
   curproc->pagesinmem = 0;
+  curproc->pagesinswapfile = 0;
+  curproc->totalPageFaultCount = 0;
+  curproc->totalPagedOutCount = 0;
+  curproc->head = 0;
+
   sz = 0;
   for (i = 0, off = elf.phoff; i < elf.phnum; i++, off += sizeof(ph))
   {
@@ -125,6 +148,17 @@ bad:
     iunlockput(ip);
     end_op();
   }
-  curproc->pagesinmem = oldpagesno;
+  curproc->pagesinmem = pagesinmem;
+  curproc->pagesinswapfile = pagesinswapfile;
+  curproc->totalPageFaultCount = totalPageFaultCount;
+  curproc->totalPagedOutCount = totalPagedOutCount;
+  curproc->head = head;
+  for (i = 0; i < MAX_PSYC_PAGES; i++)
+  {
+    curproc->freepages[i].va = freepages[i].va;
+    curproc->freepages[i].next = freepages[i].next;
+    curproc->swappedpages[i].va = swappedpages[i].va;
+    curproc->swappedpages[i].swaploc = swappedpages[i].swaploc;
+  }
   return -1;
 }

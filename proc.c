@@ -21,14 +21,6 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
-int strcmp(const char *p, const char *q)
-{
-  while (*p && *p == *q)
-  {
-    p++, q++;
-  }
-  return (uchar)*p - (uchar)*q;
-}
 void pinit(void)
 {
   initlock(&ptable.lock, "ptable");

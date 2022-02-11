@@ -84,13 +84,13 @@ struct proc
   // Swap file. must initiate with create swap file
   struct file *swapFile; // page file
 
-  int pagesinmem;
-  int pagesinswapfile;
+  int pagesinmem; // # of pages in memory
+  int pagesinswapfile; // # of pages in swap file
   struct pgdesc swappedpages[MAX_PSYC_PAGES]; // Number of maximum pages for per process in page table
-  struct freepg freepages[MAX_PSYC_PAGES];
-  struct freepg *head;
-  int totalPageFaultCount;
-  int totalPagedOutCount;
+  struct freepg freepages[MAX_PSYC_PAGES]; // linked list of pages in memory
+  struct freepg *head; // head of the linked list
+  int totalPageFaultCount; // # of page fault for the process
+  int totalPagedOutCount; // # of pages that were placed in the swap
 };
 
 // Process memory is laid out contiguously, low addresses first:
