@@ -289,7 +289,7 @@ void recordNewPage(uint va)
 #ifdef SELECTION == FIFO
   for (int i = 0; i < MAX_PSYC_PAGES; i++)
   {
-    if (!myproc()->freepages[i].va)
+    if (myproc()->freepages[i].va = (char *)0xffffffff)
     {
       myproc()->freepages[i].va = va;
       myproc()->freepages[i].next = myproc()->head;
