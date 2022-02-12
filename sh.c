@@ -155,6 +155,25 @@ main(void)
     }
   }
 
+// TODO delete
+
+#ifdef FIFO
+  printf(1, "Paging policy: FIFO\n");
+  #endif
+#ifdef SCFIFO
+  printf(1, "Paging policy: SCFIFO\n");
+  #endif
+#ifdef NFU
+  printf(1, "Paging policy: NFU\n");
+  #endif
+#ifdef NONE
+  printf(1, "Paging policy: NONE\n");
+#endif
+
+#if TRUE
+  printf(1, "Verbose printing selected.\n");
+#endif
+
   // Read and run input commands.
   while(getcmd(buf, sizeof(buf)) >= 0){
     if(buf[0] == 'c' && buf[1] == 'd' && buf[2] == ' '){
@@ -196,6 +215,8 @@ struct cmd*
 execcmd(void)
 {
   struct execcmd *cmd;
+  // TODO delete 
+  printf(1, "execcmd:malloc pid %d size %d\n", getpid(), sizeof(*cmd));
 
   cmd = malloc(sizeof(*cmd));
   memset(cmd, 0, sizeof(*cmd));

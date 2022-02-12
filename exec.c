@@ -38,9 +38,14 @@ int exec(char *path, char **argv)
   if ((pgdir = setupkvm()) == 0)
     goto bad;
 
-  // Load program into memory.
-  // when a porgram loads into memory then no pages is stored in swap area
+    // Load program into memory.
+    // TODO delete
+#ifdef NONE
+  cprintf("exec pid %d\n", curproc->pid); // TODO delete
   // backup and reset proc fields
+  cprintf("EXEC: backing up page info \n"); // TODO delete
+  // TODO delete
+  cprintf("EXEC: NONE undefined (proc = %s)- backing up page info \n", curproc->name);
   int pagesinmem = curproc->pagesinmem;
   int pagesinswapfile = curproc->pagesinswapfile;
   int totalPageFaultCount = curproc->totalPageFaultCount;
@@ -50,20 +55,35 @@ int exec(char *path, char **argv)
   for (i = 0; i < MAX_PSYC_PAGES; i++)
   {
     freepages[i].va = curproc->freepages[i].va;
-    curproc->freepages[i].va = 0;
+    curproc->freepages[i].va = (char *)0xffffffff;
     freepages[i].next = curproc->freepages[i].next;
     curproc->freepages[i].next = 0;
+    // TODO for secnd chance
+    // TODO Delete
+    freepages[i].prev = curproc->freepages[i].prev;
+    curproc->freepages[i].prev = 0;
+    // TODO delete upto this for scfifo
+
+    // TODO critical check for aging
+    freepages[i].age = curproc->freepages[i].age;
+    curproc->freepages[i].age = 0;
+    swappedpages[i].age = curproc->swappedpages[i].age;
+    curproc->swappedpages[i].age = 0;
+
     swappedpages[i].va = curproc->swappedpages[i].va;
-    curproc->swappedpages[i].va = 0;
+    curproc->swappedpages[i].va = (char *)0xffffffff;
     swappedpages[i].swaploc = curproc->swappedpages[i].swaploc;
     curproc->swappedpages[i].swaploc = 0;
   }
   struct freepg *head = curproc->head;
+  struct freepg *tail = curproc->tail; // TODO for scfifo delete
   curproc->pagesinmem = 0;
   curproc->pagesinswapfile = 0;
   curproc->totalPageFaultCount = 0;
   curproc->totalPagedOutCount = 0;
   curproc->head = 0;
+  curproc->tail = 0; // TODO for scfifo delete
+#endif
 
   sz = 0;
   for (i = 0, off = elf.phoff; i < elf.phnum; i++, off += sizeof(ph))
@@ -128,16 +148,20 @@ int exec(char *path, char **argv)
   curproc->tf->eip = elf.entry; // main
   curproc->tf->esp = sp;
 
-  /**
-   * @brief a swap file that was created in for() but it's
-   * content was similar to the content of the parent process is
-   * no longer relevent here
-   */
+  // a swap file has been created in fork(), but its content was of the
+  // parent process, and is no longer relevant.
   removeSwapFile(curproc);
   createSwapFile(curproc);
   switchuvm(curproc);
+  // TODO delete
+  cprintf("freevm(oldpgdir)\n");
   freevm(oldpgdir);
   cprintf("no. pages allocated on exec: %d, pid %d\n", curproc->pagesinmem, curproc->pid);
+  // TODO delete
+  if (strcmp(curproc->name, "sh") == 0)
+#if FIFO
+    cprintf("\n\n SHELL PRINTING FIFO\n\n");
+#endif
   return 0;
 
 bad:
@@ -148,17 +172,23 @@ bad:
     iunlockput(ip);
     end_op();
   }
+#ifdef NONE
   curproc->pagesinmem = pagesinmem;
   curproc->pagesinswapfile = pagesinswapfile;
   curproc->totalPageFaultCount = totalPageFaultCount;
   curproc->totalPagedOutCount = totalPagedOutCount;
   curproc->head = head;
+  curproc->tail = tail; // TODO for scfifo delete
   for (i = 0; i < MAX_PSYC_PAGES; i++)
   {
     curproc->freepages[i].va = freepages[i].va;
     curproc->freepages[i].next = freepages[i].next;
+    curproc->freepages[i].prev = freepages[i].prev; // TODO for scfifo delete
+    curproc->freepages[i].age = freepages[i].age;
+    curproc->swappedpages[i].age = swappedpages[i].age;
     curproc->swappedpages[i].va = swappedpages[i].va;
     curproc->swappedpages[i].swaploc = swappedpages[i].swaploc;
   }
+#endif
   return -1;
 }

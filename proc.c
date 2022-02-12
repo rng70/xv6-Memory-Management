@@ -7,6 +7,10 @@
 #include "proc.h"
 #include "spinlock.h"
 
+// using 0x80000000 introduces "negative" numbers which r a pain in the ass !
+#define ADD_TO_AGE 0x40000000
+#define DEBUG 0
+
 struct
 {
   struct spinlock lock;
@@ -20,6 +24,59 @@ extern void forkret(void);
 extern void trapret(void);
 
 static void wakeup1(void *chan);
+
+void NFUupdate()
+{
+  struct proc *p;
+  int i;
+  // TODO delete uint b4, after, newAge;
+  pte_t *pte, *pde, *pgtab;
+
+  acquire(&ptable.lock);
+  for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  {
+    if ((p->state == RUNNING || p->state == RUNNABLE || p->state == SLEEPING) && (p->pid > 2))
+    { // && (strcmp(proc->name, "init") != 0 || strcmp(proc->name, "sh") != 0)) {
+      // TODO deletecprintf("NFUupdate: p->name: %s, update pages...\n", p->name);
+
+      for (i = 0; i < MAX_PSYC_PAGES; i++)
+      {
+        if (p->freepages[i].va != (char*)0xffffffff)
+          continue;
+
+        // TODO delete           b4 = p->freepages[i].age;
+        ++p->freepages[i].age;
+        // TODO delete after = p->freepages[i].age;
+        // if(b4sh < after)
+        // cprintf("\n\n===== OH NO! proc: %s,  page No. %d,  b4sh: %d < after: %d !!! ====  \n\n", p->name, i, b4sh, after);
+        ++p->swappedpages[i].age;
+        // only dealing with pages in RAM
+        // might mean we have to check access bit b4 moving a page to disk so we don't miss a tick
+        pde = &p->pgdir[PDX(p->freepages[i].va)];
+        if (*pde & PTE_P)
+        {
+          pgtab = (pte_t *)P2V(PTE_ADDR(*pde));
+          pte = &pgtab[PTX(p->freepages[i].va)];
+        }
+        else
+          pte = 0;
+        //*pte = walkpgdir(proc->pgdir, (void*)p->freepages[i].va, 0);
+        if (pte)
+          // TODO verify if need to add this to where a page is moved to disc
+          if ((*pte) & PTE_A)
+          {
+            p->freepages[i].age = 0;
+            // p->freepages[i].age |= ADD_TO_AGE;
+            // (*pte) &= ~PTE_A;
+            // TODO delete newAge = p->freepages[i].age;
+            // if(after > newAge)
+            //  cprintf("\n\n===== OH NO! proc: %s,  page No. %d,  atter: %d > new: %d \n\n", p->name, i, after, newAge);
+          }
+      }
+    }
+  }
+  release(&ptable.lock);
+}
 
 void pinit(void)
 {
@@ -115,20 +172,23 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
-  // initialize page structure info for process while allocating
+  // initialize process's page data
   for (int i = 0; i < MAX_PSYC_PAGES; i++)
   {
-    p->freepages[i].va = 0;
+    p->freepages[i].va = (char *)0xffffffff;
     p->freepages[i].next = 0;
+    p->freepages[i].prev = 0; // TODO for scfifo delete
+    p->freepages[i].age = 0;
+    p->swappedpages[i].age = 0;
     p->swappedpages[i].swaploc = 0;
-    p->swappedpages[i].va = 0;
+    p->swappedpages[i].va = (char *)0xffffffff;
   }
-
   p->pagesinmem = 0;
   p->pagesinswapfile = 0;
-  p->totalPagedOutCount = 0;
   p->totalPageFaultCount = 0;
+  p->totalPagedOutCount = 0;
   p->head = 0;
+  p->tail = 0; // TODO for scfifo delete
 
   return p;
 }
@@ -180,15 +240,19 @@ int growproc(int n)
   sz = curproc->sz;
   if (n > 0)
   {
+    // TODO delete
+    cprintf("growproc:allocuvm pid%d n:%d\n", curproc->pid, n);
     if ((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
   }
   else if (n < 0)
   {
+    // TODO delete
+    cprintf("growproc:deallocuvm\n");
     if ((sz = deallocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
-    // curproc->pagesinmem -= PGROUNDUP(n);
-    curproc->pagesinmem -= ((PGROUNDUP(sz) - PGROUNDUP(curproc->sz)) % PGSIZE);
+    // TODO delete curproc->pagesinmem -= ((PGROUNDUP(sz) - PGROUNDUP(curproc->sz)) % PGSIZE);
+    // TODO update proc->freepages
   }
   curproc->sz = sz;
   switchuvm(curproc);
@@ -200,9 +264,12 @@ int growproc(int n)
 // Caller must set state of returned proc to RUNNABLE.
 int fork(void)
 {
-  int i, pid;
+  int i, j, pid;
   struct proc *np;
   struct proc *curproc = myproc();
+
+  // if(SELECTION==FIFO)
+  //   cprintf("\n\n FIFO chosen!\n\n");
 
   // Allocate process.
   if ((np = allocproc()) == 0)
@@ -211,6 +278,8 @@ int fork(void)
   }
 
   // Copy process state from proc.
+  // TODO delete
+  cprintf("fork:copyuvm proc->pagesNo:%d\n", curproc->pagesinmem);
   if ((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0)
   {
     kfree(np->kstack);
@@ -218,10 +287,16 @@ int fork(void)
     np->state = UNUSED;
     return -1;
   }
+  // TODO delete
+  cprintf("fork:copyuvm proc->pagesNo:%d\n", curproc->pagesinmem);
+  np->pagesinmem = curproc->pagesinmem;
+  np->pagesinswapfile = curproc->pagesinswapfile;
+  // TODO delete
+  // np->head = curproc->head;
+  // np->tail = curproc->tail; // TODO delete for scFIFO
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
-  np->pagesinmem = curproc->pagesinmem; // pagesNo from parent process
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -235,23 +310,91 @@ int fork(void)
 
   pid = np->pid;
 
-  // here create swap file for current process
+  // // initialize process's page data
+  // for (i = 0; i < MAX_TOTAL_PAGES; i++) {
+  //   np->pages[i].inswapfile = proc->pages[i].inswapfile;
+  //   np->pages[i].swaploc = proc->pages[i].swaploc;
+  // }
+  // np->pagesNo = 0;
   createSwapFile(np);
   char buf[PGSIZE / 2] = "";
   int offset = 0;
   int nread = 0;
-
+  // pid=2 is sh, so the parent, init (pid=1) has no swap file to copy.
+  // read the parent's swap file in chunks of size PGDIR/2, otherwise for some
+  // reason, you get "panic acquire" if buf is ~4000 bytes
   if (strcmp(curproc->name, "init") != 0 && strcmp(curproc->name, "sh") != 0)
   {
     while ((nread = readFromSwapFile(curproc, buf, offset, PGSIZE / 2)) != 0)
     {
       if (writeToSwapFile(np, buf, offset, nread) == -1)
-      {
-        panic("fork: error while writing from parent's swap file to child");
-      }
+        panic("fork: error while writing the parent's swap file to the child");
       offset += nread;
     }
   }
+
+  /* TODO no need to do this after all
+  np->totalPageFaultCount = curproc->totalPageFaultCount;
+  np->totalPagedOutCount = curproc->totalPagedOutCount;
+
+  char *diff = (char *)(&curproc->freepages[0] - &np->freepages[0]);
+  for (i = 0; i < MAX_PSYC_PAGES; i++)
+  {
+    np->freepages[i].va = curproc->freepages[i].va;
+    np->freepages[i].next = (struct freepg *)((uint)curproc->freepages[i].next + (uint)diff);
+    np->freepages[i].prev = (struct freepg *)((uint)curproc->freepages[i].prev + (uint)diff);
+    np->freepages[i].age = curproc->freepages[i].age;
+    np->swappedpages[i].age = curproc->swappedpages[i].age;
+    np->swappedpages[i].va = curproc->swappedpages[i].va;
+    np->swappedpages[i].swaploc = curproc->swappedpages[i].swaploc;
+  }
+*/
+
+  for (i = 0; i < MAX_PSYC_PAGES; i++)
+  {
+    np->freepages[i].va = curproc->freepages[i].va;
+    np->freepages[i].age = curproc->freepages[i].age;
+    np->swappedpages[i].age = curproc->swappedpages[i].age;
+    np->swappedpages[i].va = curproc->swappedpages[i].va;
+    np->swappedpages[i].swaploc = curproc->swappedpages[i].swaploc;
+  }
+
+  for (i = 0; i < MAX_PSYC_PAGES; i++){
+    for (j = 0; j < MAX_PSYC_PAGES; ++j){
+      if (np->freepages[j].va == curproc->freepages[i].next->va)
+        np->freepages[i].next = &np->freepages[j];
+      if (np->freepages[j].va == curproc->freepages[i].prev->va)
+        np->freepages[i].prev = &np->freepages[j];
+    }
+  }
+
+#if FIFO// TODO check
+  for (i = 0; i < MAX_PSYC_PAGES; i++)
+  {
+    if (curproc->head->va == np->freepages[i].va){
+      // TODO delete
+      cprintf("\nfork: head copied!\n\n");
+      np->head = &np->freepages[i];
+    }
+    if (curproc->tail->va == np->freepages[i].va)
+      np->tail = &np->freepages[i];
+  }
+#endif
+#if SCFIFO // TODO check and delete
+  for (i = 0; i < MAX_PSYC_PAGES; i++)
+  {
+    if (curproc->head->va == np->freepages[i].va)
+    {
+      // TODO delete       cprintf("\nfork: head copied!\n\n");
+      np->head = &np->freepages[i];
+    }
+    if (curproc->tail->va == np->freepages[i].va)
+    {
+      np->tail = &np->freepages[i];
+      // cprintf("\nfork: head copied!\n\n");
+    }
+  }
+#endif
 
   acquire(&ptable.lock);
 
@@ -285,9 +428,14 @@ void exit(void)
   }
 
   if (removeSwapFile(curproc) != 0)
-  {
-    panic("exit: error removing swap file");
-  }
+    panic("exit: error deleting swap file");
+
+#if TRUE
+  // sending proc as arg just to share func with procdump
+  // TODO implement 
+  // printProcMemPageInfo(proc);
+  printf(1, "implement printProcMemPageInfo(proc);");
+#endif
   begin_op();
   iput(curproc->cwd);
   end_op();
@@ -339,6 +487,8 @@ int wait(void)
         pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
+        // TODO delete 
+        cprintf("freevm(p->pgdir)\n");
         freevm(p->pgdir);
         p->pid = 0;
         p->parent = 0;
@@ -604,6 +754,7 @@ void printExtendedOutputOnControlP(struct proc *p)
   }
   cprintf("\n");
 }
+
 // PAGEBREAK: 36
 //  Print a process listing to console.  For debugging.
 //  Runs when user types ^P on console.
@@ -637,6 +788,7 @@ void procdump(void)
       for (i = 0; i < 10 && pc[i] != 0; i++)
         cprintf(" %p", pc[i]);
     }
+    cprintf("\n");
     printExtendedOutputOnControlP(p);
   }
 }

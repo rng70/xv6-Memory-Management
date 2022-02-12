@@ -50,6 +50,10 @@ void trap(struct trapframe *tf)
     if (cpuid() == 0)
     {
       acquire(&tickslock);
+      //TODO delete NFUupdate();
+#if NFU
+      NFUupdate();
+#endif
       ticks++;
       wakeup(&ticks);
       release(&tickslock);
@@ -79,22 +83,20 @@ void trap(struct trapframe *tf)
     break;
   case T_PGFLT:
     uint addr = rcr2();
-    uint *vaddr = (uint *)P2V_WO(myproc()->pgdir[PDX(addr)]);
-
-    // check
-    if ((int)vaddr & PTE_P) // if page table isn't present at page directory --> hard page fault
-    {
-      if (vaddr[PTX(addr)] & PTE_PG && !(vaddr[PTX(addr)] & PTE_P)) // if the page is in the process's swap file
-      {
+    pde_t *vaddr = &myproc()->pgdir[PDX(addr)];
+    if (((int)vaddr & PTE_P) != 0) // if page table isn't present at page directory -> hard page fault
+      if (((uint *)PTE_ADDR(P2V(*vaddr)))[PTX(addr)] & PTE_PG)
+      { // if the page is in the process's swap file
+        // TODO delete
         cprintf("page is in swap file, pid %d, va %p", myproc()->pid, addr);
-        uint paddr = (uint)(addr & ~0xfff);
-        swapPages(paddr);
-        myproc()->totalPageFaultCount++;
+        swapPages(PTE_ADDR(addr));
+        ++myproc()->totalPageFaultCount;
+        cprintf("proc->totalPageFaultCount:%d\n", ++myproc()->totalPageFaultCount);//TODO delete
+        cprintf("swapPages returned\n"); // TODO delete
         return;
       }
-    }
+    cprintf("Fuck you pointer"); // TODO delete
     break;
-
   // PAGEBREAK: 13
   default:
     if (myproc() == 0 || (tf->cs & 3) == 0)
